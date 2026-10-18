@@ -1,0 +1,317 @@
+@import "./tokens.css";
+
+/* ============================================================
+   全局基础样式
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+  user-select: none;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--brand);
+  text-decoration: none;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--r-full);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ============================================================
+   通用组件类
+   ============================================================ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--r);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background var(--transition), color var(--transition),
+    box-shadow var(--transition), transform var(--transition);
+  border: 1px solid transparent;
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-primary {
+  background: var(--brand);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--brand-hover);
+}
+.btn-primary:active:not(:disabled) {
+  background: var(--brand-active);
+}
+
+.btn-ghost {
+  background: var(--surface);
+  color: var(--text-2);
+  border-color: var(--border);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.btn-soft {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.btn-soft:hover:not(:disabled) {
+  background: var(--brand-soft-hover);
+}
+
+.btn-danger {
+  background: var(--red);
+  color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.btn-sm {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: var(--r-sm);
+}
+
+.field {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.field:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-ring);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.tag-green {
+  background: var(--green-soft);
+  color: var(--green);
+}
+.tag-yellow {
+  background: var(--yellow-soft);
+  color: var(--yellow);
+}
+.tag-red {
+  background: var(--red-soft);
+  color: var(--red);
+}
+.tag-blue {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+.tag-purple {
+  background: var(--purple-soft);
+  color: var(--purple);
+}
+.tag-gray {
+  background: var(--surface-3);
+  color: var(--text-3);
+}
+
+/* 复选框 */
+.checkbox {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--surface);
+  cursor: pointer;
+  position: relative;
+  flex: none;
+  transition: all var(--transition);
+}
+.checkbox:hover {
+  border-color: var(--brand);
+}
+.checkbox:checked {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+.checkbox:checked::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 1.5px;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.checkbox:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 单调省略（路径中间省略） */
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.text-2 {
+  color: var(--text-2);
+}
+.text-3 {
+  color: var(--text-3);
+}
+
+/* 旋转 spinner —— 「处理中的角度显示」 */
+.spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2.5px solid var(--brand-soft);
+  border-top-color: var(--brand);
+  animation: spin 0.7s linear infinite;
+  flex: none;
+}
+.spinner-lg {
+  width: 30px;
+  height: 30px;
+  border-width: 3px;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 不确定进度条动画 */
+@keyframes indeterminate {
+  0% {
+    left: -40%;
+    width: 40%;
+  }
+  50% {
+    width: 55%;
+  }
+  100% {
+    left: 100%;
+    width: 40%;
+  }
+}
+
+/* 淡入 */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fade-in {
+  animation: fade-in 200ms ease-out;
+}

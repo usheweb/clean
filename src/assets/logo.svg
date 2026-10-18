@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="唐三浪清理">
+  <defs>
+    <!-- 底色渐变：左上青 → 右下紫（沿用品牌底色） -->
+    <linearGradient id="bg" gradientUnits="userSpaceOnUse" x1="31" y1="31" x2="377" y2="550">
+      <stop offset="0%" stop-color="#5BC9F3"/>
+      <stop offset="100%" stop-color="#725AF5"/>
+    </linearGradient>
+    <!-- 光晕遮罩：小圆挖掉一个更大的偏移圆 → 右上平滑月牙（无尖刺） -->
+    <mask id="halo">
+      <rect width="512" height="512" fill="#000000"/>
+      <circle cx="256" cy="256" r="75" fill="#FFFFFF"/>
+      <circle cx="233.6" cy="304" r="114" fill="#000000"/>
+    </mask>
+  </defs>
+
+  <!-- 外框：圆角方形 -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- 轨道：4 段断环 + 4 个「清理」语义节点，整体顺时针倾斜 25°；
+       节点各自反旋 -25°，所以节点本身保持正立不歪。 -->
+  <g transform="rotate(25 256 256)">
+
+    <!-- 断环 4 段弧（缺口 38° / 弧段 52°） -->
+    <path d="M207.8 395.9 A148 148 0 0 1 116.1 304.2" fill="none" stroke="#FFFFFF" stroke-opacity="0.95" stroke-width="26" stroke-linecap="round"/>
+    <path d="M116.1 207.8 A148 148 0 0 1 207.8 116.1" fill="none" stroke="#FFFFFF" stroke-opacity="0.95" stroke-width="26" stroke-linecap="round"/>
+    <path d="M304.2 116.1 A148 148 0 0 1 395.9 207.8" fill="none" stroke="#FFFFFF" stroke-opacity="0.95" stroke-width="26" stroke-linecap="round"/>
+    <path d="M395.9 304.2 A148 148 0 0 1 304.2 395.9" fill="none" stroke="#FFFFFF" stroke-opacity="0.95" stroke-width="26" stroke-linecap="round"/>
+
+    <!-- 正下：三粒灰尘被收拢 -->
+    <g transform="rotate(-25 256 414)">
+      <circle cx="226" cy="414" r="10" fill="#FFFFFF"/>
+      <circle cx="256" cy="414" r="8.5" fill="#FFFFFF"/>
+      <circle cx="286" cy="414" r="10" fill="#FFFFFF"/>
+    </g>
+
+    <!-- 正左：小扫帚（清扫） -->
+    <g transform="rotate(-25 108 256)">
+      <rect x="104" y="222" width="8" height="48" rx="4" fill="#FFFFFF"/>
+      <path d="M86 268 H130 L136 292 H80 Z" fill="#FFFFFF"/>
+      <path d="M100 272 L96 288" stroke="#DFEEFB" stroke-width="5" stroke-linecap="round"/>
+      <path d="M116 272 L120 288" stroke="#DFEEFB" stroke-width="5" stroke-linecap="round"/>
+    </g>
+
+    <!-- 正上：四角星（洁净闪亮） -->
+    <g transform="rotate(-25 256 108)">
+      <path d="M256 80 C259.5 97 267 104.5 284 108 C267 111.5 259.5 119 256 136 C252.5 119 245 111.5 228 108 C245 104.5 252.5 97 256 80 Z" fill="#FFFFFF"/>
+    </g>
+
+    <!-- 正右：擦拭留下的两道痕（一白一浅蓝） -->
+    <g transform="rotate(-25 404 256)">
+      <rect x="378" y="240" width="52" height="13" rx="6.5" fill="#FFFFFF"/>
+      <rect x="378" y="261" width="36" height="13" rx="6.5" fill="#DFEEFB"/>
+    </g>
+
+  </g>
+
+  <!-- 品牌机器人：完整保留（黑色圆头 / 浅蓝双眼 / 两侧耳环 / 浅蓝光晕底盘） -->
+  <circle cx="256" cy="256" r="75" fill="#ACE0F9"/>
+  <circle cx="256" cy="256" r="75" fill="#E9F6FE" mask="url(#halo)"/>
+  <ellipse cx="182.4" cy="261.4" rx="15.4" ry="25.5" fill="#000000"/>
+  <ellipse cx="182.4" cy="261.4" rx="8.5" ry="18.6" fill="#ACE0F9"/>
+  <ellipse cx="329.6" cy="261.4" rx="15.4" ry="25.5" fill="#000000"/>
+  <ellipse cx="329.6" cy="261.4" rx="8.5" ry="18.6" fill="#ACE0F9"/>
+  <circle cx="256" cy="256" r="52" fill="#000000"/>
+  <ellipse cx="236.7" cy="244" rx="6.8" ry="14" fill="#ACE0F9"/>
+  <ellipse cx="275.3" cy="244" rx="6.8" ry="14" fill="#ACE0F9"/>
+</svg>
