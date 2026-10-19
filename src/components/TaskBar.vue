@@ -46,27 +46,27 @@ const bytesLeft = computed(() => {
       </div>
 
       <div class="head-stats" v-if="p">
-        <div class="stat">
+        <div class="stat stat-items">
           <span class="k">已处理</span>
           <span class="v">{{ fmtCount(p.itemsDone) }}/{{ p.itemsTotal || "?" }} 项</span>
         </div>
-        <div class="stat">
+        <div class="stat stat-files">
           <span class="k">文件</span>
           <span class="v">{{ fmtCount(p.filesDone) }}/{{ p.filesTotal ? fmtCount(p.filesTotal) : "?" }}</span>
         </div>
-        <div class="stat">
+        <div class="stat stat-bytes">
           <span class="k">{{ p.bytesTotal ? "已处理体积" : "已发现" }}</span>
           <span class="v">{{ fmtSize(p.bytesDone) }}</span>
         </div>
-        <div class="stat" v-if="p.bytesTotal">
+        <div class="stat stat-speed" v-if="p.bytesTotal">
           <span class="k">速率</span>
           <span class="v">{{ fmtSpeed(p.speedBps) }}</span>
         </div>
-        <div class="stat" v-if="p.bytesTotal">
+        <div class="stat stat-eta" v-if="p.bytesTotal">
           <span class="k">剩余</span>
           <span class="v">{{ fmtEta(bytesLeft, p.speedBps) }}</span>
         </div>
-        <div class="stat">
+        <div class="stat stat-time">
           <span class="k">耗时</span>
           <span class="v">{{ fmtDuration(p.elapsedMs) }}</span>
         </div>
@@ -159,6 +159,30 @@ const bytesLeft = computed(() => {
   flex-direction: column;
   align-items: flex-end;
   line-height: 1.3;
+  flex: none;
+  white-space: nowrap;
+  /* 每列给一个够用的固定宽度：计数一直在涨，宽度跟着内容走的话，整条头栏会随着
+     数字位数变化左右抽动，连左边「当前文件」的省略位置也跟着跳 —— 扫描时看起来
+     就是页面在抖动。宽度按各列内容的上限估，够用即可，不额外占地方。 */
+}
+.stat-items {
+  min-width: 64px;
+}
+.stat-files {
+  min-width: 80px;
+}
+.stat-bytes {
+  min-width: 64px;
+}
+.stat-speed {
+  min-width: 68px;
+}
+.stat-eta {
+  /* 时长最长会出现 1:23:45 这种带小时的写法 */
+  min-width: 52px;
+}
+.stat-time {
+  min-width: 52px;
 }
 .stat .k {
   font-size: 10.5px;

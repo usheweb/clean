@@ -221,6 +221,35 @@ pub fn remove_link(p: &Path) -> bool {
     std::fs::remove_dir(p).is_ok()
 }
 
+// ---------- 回收站 / 废纸篓 ----------
+
+/// macOS 专属：构造一个"静音"的回收站上下文。
+///
+/// `trash` crate 在 macOS 上默认走 Finder（用 osascript 请 Finder 去删），而 Finder
+/// **每删一个文件都会响一次系统的「废纸篓」音效** —— 批量清理时听起来就是连续不断的
+/// 「哒哒哒」。改成 NsFileManager 方式后同样进废纸篓，全程安静，速度也更快；
+/// 代价是 Finder 右键的「放回原处」在部分系统上不可用 —— 文件仍然躺在废纸篓里，
+/// 想还原的话从废纸篓里拖出来即可。
+#[cfg(target_os = "macos")]
+fn trash_ctx() -> trash::TrashContext {
+    use trash::macos::{DeleteMethod, TrashContextExtMacos};
+
+    let mut ctx = trash::TrashContext::new();
+    ctx.set_delete_method(DeleteMethod::NsFileManager);
+    ctx
+}
+
+#[cfg(not(target_os = "macos"))]
+fn trash_ctx() -> trash::TrashContext {
+    trash::TrashContext::new()
+}
+
+/// 移入回收站 / 废纸篓的统一入口：所有删除都必须经过它，
+/// 免得有人绕过上面的设置直接用 `trash::delete` 又把声音放出来。
+pub fn move_to_trash(path: &Path) -> Result<(), trash::Error> {
+    trash_ctx().delete(path)
+}
+
 // ---------- 进程检测 ----------
 
 /// 检测给定进程名是否在运行；检测失败按"在运行"处理（fail-safe，绝不错杀）。

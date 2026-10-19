@@ -8,6 +8,7 @@ import {
   onDataRow,
   startCleanRun,
   startCleanScan,
+  type CleanDoneRow,
   type CleanItemMeta,
   type CleanTarget,
 } from "../api/ipc";
@@ -26,9 +27,14 @@ const selected = reactive(new Set<string>());
 const permanent = ref(false);
 const confirmOpen = ref(false);
 const scanning = ref(false);
+// 扫描结束后才按体积排序：扫描中每来一条就整体重排，会让列表里的行来回跳动
+const sorted = ref(false);
+// 本次清理已经摘掉的条目数：全部清完后，空列表要显示「已清理完成」而不是「还没扫描」
+const cleanedCount = ref(0);
 
 let unRow: (() => void) | null = null;
 let unDone: (() => void) | null = null;
+let unClean: (() => void) | null = null;
 
 onMounted(async () => {
   try {
@@ -42,6 +48,18 @@ onMounted(async () => {
   });
   unDone = await onDataDone("clean_targets", () => {
     scanning.value = false;
+    sorted.value = true;
+  });
+  // 清理过程中每处理完一条，就把已经清干净的条目从列表里摘掉：
+  // 于是「已选 N 项 · 体积」、分组合计会跟着边清边减，不用等结束再手动重扫一次。
+  // 有跳过/失败（磁盘上还留着东西）的条目不动，免得列表看着清空了、实际还有残留。
+  unClean = await onDataRow<CleanDoneRow>("clean_done", (r) => {
+    if (!r.row.removed) return;
+    const i = targets.value.findIndex((t) => t.id === r.row.id);
+    if (i < 0) return;
+    targets.value.splice(i, 1);
+    selected.delete(r.row.id);
+    cleanedCount.value += 1;
   });
   task.init();
 });
@@ -49,6 +67,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   unRow?.();
   unDone?.();
+  unClean?.();
 });
 
 const groups = computed(() => {
@@ -67,7 +86,9 @@ const groups = computed(() => {
     })
     .map(([name, items]) => ({
       name,
-      items: items.sort((a, b) => b.bytes - a.bytes),
+      // 扫描中保持到达顺序 —— 新条目只会追加在本组末尾，不会把已有的行挤下去；
+      // 扫描结束后再按体积从大到小排一次
+      items: sorted.value ? items.sort((a, b) => b.bytes - a.bytes) : items,
       bytes: items.reduce((s, x) => s + x.bytes, 0),
     }))
     .filter((g) => g.items.length > 0);
@@ -82,6 +103,8 @@ async function scan() {
   targets.value = [];
   selected.clear();
   scanning.value = true;
+  sorted.value = false;
+  cleanedCount.value = 0;
   const id = await task.start(() => startCleanScan());
   if (!id) scanning.value = false;
 }
@@ -173,9 +196,15 @@ async function doClean() {
     </div>
 
     <div v-else-if="!hasScan" class="empty card">
-      <p class="empty-title">还没有扫描结果</p>
-      <p class="text-2">点右上角【开始扫描】，会列出当前系统中可安全清理的缓存与日志。</p>
-      <div class="meta-preview">
+      <p class="empty-title">{{ cleanedCount ? "选中项已清理完成" : "还没有扫描结果" }}</p>
+      <p class="text-2">
+        {{
+          cleanedCount
+            ? "列表里已经没有待清理的条目了，想复查可以再点一次【开始扫描】。"
+            : "点右上角【开始扫描】，会列出当前系统中可安全清理的缓存与日志。"
+        }}
+      </p>
+      <div v-if="!cleanedCount" class="meta-preview">
         <div v-for="m in metas" :key="m.key" class="meta-chip" :class="`m-${m.level}`">
           {{ m.name }}
         </div>
@@ -279,6 +308,12 @@ async function doClean() {
   font-size: 13px;
   color: var(--text-2);
   margin-left: var(--sp-2);
+  /* 固定宽度 + 右对齐 + 等宽数字：扫描时数字一直在涨，不固定的话左侧那几个
+     按钮会被推着左右移动 */
+  flex: none;
+  min-width: 176px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .summary b {
   color: var(--brand);

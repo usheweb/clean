@@ -1036,7 +1036,23 @@ mod imp {
 
     // ---------------------------------------------------------------- 子进程：robocopy / mklink
 
-    /// 搬运目录。move_files=true 用 /MOVE（搬完即删源）。返回 (返回码, 日志尾)。
+    /// robocopy 返回码的含义：0-7 都算成功（>=8 才是真失败）
+    fn rc_hint(rc: i32) -> &'static str {
+        match rc {
+            0 => "（无变化）",
+            1 => "（复制成功）",
+            2 => "（有额外文件/目录）",
+            3 => "（复制成功 + 有额外文件）",
+            4..=7 => "（成功 + 有额外/不匹配项）",
+            8 => "（有文件复制失败）",
+            9..=15 => "（部分失败）",
+            16 => "（严重错误：多半是权限不足或路径不可访问）",
+            112 => "（目标盘空间不足）",
+            _ => "",
+        }
+    }
+
+    /// 搬运目录。move_files=true 用 /MOVE（搬完即删源）。返回 (返回码, 日志首页)。
     /// 轮询 try_wait 上报进度；被取消时 kill 子进程（随后由调用方安全回搬）。
     fn robocopy(
         src: &str,
@@ -1050,6 +1066,16 @@ mod imp {
         if move_files {
             args.push("/MOVE");
         }
+        // 把实际执行的命令行记下来：排查"搬到一半又回退"时，先要确认两边路径到底是什么
+        em.log(
+            format!(
+                "  robocopy {} -> {}{}",
+                src,
+                dst,
+                if move_files { " (/MOVE)" } else { "" }
+            ),
+            "info",
+        );
         let mut cmd = Command::new("robocopy");
         cmd.args(&args);
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -1104,6 +1130,9 @@ mod imp {
         }
         let text = decode_console(&out_b);
         let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+        // 头尾都要看：robocopy 的失败原因基本都在最前面几行（「拒绝访问」「磁盘空间不足」
+        // 之类），只截尾巴会正好把原因漏掉，只留一堆 "New Dir" 之类的统计行。
+        let head = lines.iter().take(4).cloned().collect::<Vec<_>>().join(" | ");
         let tail = lines
             .iter()
             .rev()
@@ -1112,8 +1141,15 @@ mod imp {
             .cloned()
             .collect::<Vec<_>>()
             .join(" | ");
-        em.log(format!("  robocopy 返回码 {rc} {tail}"), "info");
-        (rc, tail)
+        em.log(
+            format!(
+                "  robocopy 返回码 {rc}{} {}",
+                rc_hint(rc),
+                if head.is_empty() { &tail } else { &head }
+            ),
+            if rc >= 8 { "error" } else { "info" },
+        );
+        (rc, if head.is_empty() { tail } else { head })
     }
 
     /// 安全回退：把已经搬到 dst 的数据搬回 src
@@ -1141,14 +1177,55 @@ mod imp {
         true
     }
 
-    /// 建 junction（cmd 自行解析整行，故显式加引号）
-    fn mklink(src: &str, dst: &str) -> bool {
+    /// 目标路径所在磁盘的可用空间。空间不够就没必要"先搬一半再回退" ——
+    /// 那正是「搬到一半又回退、来回循环」最容易出现的一种场景，提前判掉最省事。
+    /// 直接用 kernel32!GetDiskFreeSpaceExW，不引新依赖。
+    fn drive_free_space(path: &str) -> Option<u64> {
+        use std::os::windows::ffi::OsStrExt;
+
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetDiskFreeSpaceExW(
+                lpdirectoryname: *const u16,
+                lpfreebytesavailabletocaller: *mut u64,
+                lptotalnumberofbytes: *mut u64,
+                lptotalnumberoffreebytes: *mut u64,
+            ) -> i32;
+        }
+
+        let wide: Vec<u16> = std::ffi::OsStr::new(path)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let (mut avail, mut total, mut free) = (0u64, 0u64, 0u64);
+        let ok = unsafe { GetDiskFreeSpaceExW(wide.as_ptr(), &mut avail, &mut total, &mut free) };
+        if ok == 0 {
+            None
+        } else {
+            Some(free)
+        }
+    }
+
+    /// 建 junction（cmd 自行解析整行，故显式加引号）。
+    /// 失败时把 cmd 实际吐出来的话带回去 —— 只报一句"建联接失败"的话，
+    /// 日志里就看不出到底是权限不够还是路径有问题，等于没法排查。
+    fn mklink(src: &str, dst: &str) -> Result<(), String> {
         let line = format!("mklink /J \"{src}\" \"{dst}\"");
         let mut cmd = Command::new("cmd");
         cmd.args(["/c", &line]);
         fsutil::no_window(&mut cmd);
-        let ok = cmd.output().map(|o| o.status.success()).unwrap_or(false);
-        ok && fsutil::is_reparse(Path::new(src)) && Path::new(src).exists()
+        let out = cmd
+            .output()
+            .map_err(|e| format!("无法启动 cmd 执行 mklink: {e}"))?;
+        let msg = decode_console(&out.stdout).trim().to_string();
+        if out.status.success() && fsutil::is_reparse(Path::new(src)) && Path::new(src).exists() {
+            return Ok(());
+        }
+        Err(format!(
+            "mklink 退出码 {:?}, 输出: {}",
+            out.status.code(),
+            if msg.is_empty() { "<空>" } else { &msg }
+        ))
     }
 
     // ---------------------------------------------------------------- 搬运核心
@@ -1218,6 +1295,18 @@ mod imp {
         }
         em.log(format!("  计划: {src}\n     -> {dst}"), "info");
         em.set_current(format!("{src} → {dst}"));
+        // 空间不够就提前停手：否则会搬一部分、失败、再回退，来回折腾还可能留下两侧都有数据的
+        // 中间状态。这里判掉，源目录一动没动。
+        if let Some(free) = drive_free_space(&dst) {
+            em.log(format!("  目标盘剩余空间 {}", fsutil::fmt_size(free)), "info");
+            if free < size {
+                return Err(format!(
+                    "目标盘空间不足: 需要 {}, 剩余 {}（未搬动任何数据）",
+                    fsutil::fmt_size(size),
+                    fsutil::fmt_size(free)
+                ));
+            }
+        }
         std::fs::create_dir_all(&dst).map_err(|e| format!("创建目标目录失败: {e}"))?;
 
         // 3. robocopy + 源清零校验（最多 3 轮）
@@ -1263,11 +1352,14 @@ mod imp {
                 return Err(format!("删除空源目录失败: {e}"));
             }
         }
-        if !mklink(&src, &dst) {
-            em.log("  建联接失败, 把数据搬回源位置…", "warn");
+        if let Err(e) = mklink(&src, &dst) {
+            em.log(
+                format!("  建联接失败({e}), 把数据搬回源位置…"),
+                "warn",
+            );
             move_back(&dst, &src, &ctl, em);
             em.set_can_pause(true);
-            return Err("创建 junction 失败, 数据已搬回原位置".into());
+            return Err(format!("创建 junction 失败: {e}；（数据已搬回原位置）"));
         }
         em.set_can_pause(true);
 
@@ -1450,12 +1542,14 @@ mod imp {
         };
         if let Err(e) = moved {
             em.log(format!("  搬运失败({e}), 重建旧联接恢复原状…"), "warn");
-            mklink(&src, &old_dst);
+            if let Err(le) = mklink(&src, &old_dst) {
+                em.log(format!("  !!! 旧联接也重建失败: {le}"), "error");
+            }
             return Err("搬运失败, 已恢复原状".into());
         }
         // 3. 建新联接
-        if !mklink(&src, &new_dst) {
-            em.log("  建新联接失败, 数据搬回老位置…", "warn");
+        if let Err(e) = mklink(&src, &new_dst) {
+            em.log(format!("  建新联接失败({e}), 数据搬回老位置…"), "warn");
             let size = dir_size(&new_dst).0;
             let (rc, _) = robocopy(&new_dst, &old_dst, true, size, &ctl, em);
             if rc >= 8 {
@@ -1465,10 +1559,10 @@ mod imp {
                     ),
                     "error",
                 );
-            } else {
-                mklink(&src, &old_dst);
+            } else if let Err(le) = mklink(&src, &old_dst) {
+                em.log(format!("  !!! 旧联接重建失败: {le}"), "error");
             }
-            return Err("创建 junction 失败, 数据已搬回老位置".into());
+            return Err(format!("创建 junction 失败({e}), 数据已搬回老位置"));
         }
         // 4. 更新账本
         let new_entry = LedgerEntry {
@@ -1679,6 +1773,18 @@ mod imp {
             let mut failed = 0u64;
             let mut bytes = 0u64;
             let mut done_bytes = 0u64;
+            // 逐条留痕：迁移失败时用户看到的就是界面上一行 warn，光靠它没法判断到底是
+            // 权限、空间、被占用还是联接建不起来。这里把每条的结果攒成一份报告落盘，
+            // 出问题可以直接把文件发回来。
+            let mut failures: Vec<String> = Vec::new();
+            let mut report: Vec<String> = vec![
+                "唐三浪清理 · 高级迁移报告".into(),
+                format!("时间: {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S")),
+                format!("目标盘: {}  目标根目录: {}", drive, root_name),
+                format!("整批条目: {} 项, 计划搬运 {}", rows.len(), fsutil::fmt_size(rows.iter().map(|r| r.bytes).sum::<u64>())),
+                format!("当前是否管理员: {}", if crate::platform::is_admin() { "是" } else { "否（部分系统目录会因权限不足失败）" }),
+                String::new(),
+            ];
 
             for row in &rows {
                 if ctl.wait_gate() {
@@ -1707,16 +1813,43 @@ mod imp {
                         bytes += entry.bytes;
                         done_bytes += entry.bytes;
                         em.row("migrate_ledger", entry);
+                        report.push(format!(
+                            "[成功] {} {} -> {} ({})",
+                            row.name,
+                            row.src,
+                            dst,
+                            fsutil::fmt_size(row.bytes)
+                        ));
                     }
                     Err(msg) => {
                         failed += 1;
-                        em.log(msg, "warn");
+                        em.log(format!("{} 迁移失败: {msg}", row.name), "warn");
+                        failures.push(format!("{}（{}）: {msg}", row.name, row.src));
+                        report.push(format!("[失败] {} {} -> {}\n       原因: {msg}", row.name, row.src, dst));
                     }
                 }
                 em.inc_items();
             }
 
+            // 失败明细在结束时兜底再打一遍：中间那些 warn 会被后续日志刷走，
+            // 用户回头找原因时往往只看到最后一行。
+            if !failures.is_empty() {
+                em.log(format!("—— 失败条目共 {} 项 ——", failures.len()), "error");
+                for f in &failures {
+                    em.log(format!("  {f}"), "error");
+                }
+            }
+
             let stopped = ctl.is_cancelled();
+            report.push(String::new());
+            report.push(format!("结果: 成功 {ok}, 失败 {failed}, 搬运 {}", fsutil::fmt_size(bytes)));
+            if stopped {
+                report.push("（任务被用户中断，未处理完的条目不在统计内）".into());
+            }
+            let report_path = fsutil::write_report(&data_dir, "迁移报告", &report);
+            if let Some(p) = &report_path {
+                em.log(format!("本次迁移报告: {p}"), "info");
+            }
             em.finish(
                 ok,
                 0,
@@ -1724,7 +1857,7 @@ mod imp {
                 bytes,
                 stopped,
                 format!("迁移完成: 成功 {ok}, 失败 {failed}"),
-                None,
+                report_path,
             );
         });
     }

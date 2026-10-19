@@ -5,6 +5,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AppInfo,
   BigFile,
+  CleanDoneRow,
   CleanItemMeta,
   CleanTarget,
   DataDone,
@@ -176,4 +177,5 @@ export type {
   LedgerEntry,
   CleanTarget,
   CleanItemMeta,
+  CleanDoneRow,
 };

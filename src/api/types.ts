@@ -56,6 +56,14 @@ export interface CleanTarget {
   deletable: boolean;
 }
 
+/** 单条目标的清理结果：清干净的条目要当场从列表里摘掉 */
+export interface CleanDoneRow {
+  id: string;
+  bytes: number;
+  /** 整条都清理干净了才为 true；有跳过/失败的条目留在列表上，提示还有残留 */
+  removed: boolean;
+}
+
 export interface BigFile {
   path: string;
   name: string;

@@ -339,6 +339,10 @@ fn run_scan(em: &mut Emitter) {
     em.set_can_pause(true);
     let mut rows: u64 = 0;
     let mut stopped = false;
+    // 已扫完条目的累计量。「已发现」显示的应是本次扫描到目前为止的总量：
+    // 不累加的话，每换一个白名单条目数字就掉回 0 再重新往上爬，界面看着一直在跳。
+    let mut acc_bytes: u64 = 0;
+    let mut acc_files: u64 = 0;
 
     for it in items() {
         if em.ctl.wait_gate() {
@@ -359,10 +363,18 @@ fn run_scan(em: &mut Emitter) {
                 continue;
             }
             em.set_current(&p);
-            let stat: TreeStat = fsutil::count_tree(&p, &ctl, &mut |b, f, cur| {
-                em.set_current(cur);
-                em.set_discovered(b, f);
-            });
+            let stat: TreeStat = {
+                // 把已扫完条目的量作为基线，叠上当前这条正在统计的部分：
+                // 进度条上的「已发现 / 文件」因此只增不减，不会每条目重来一遍
+                let base_bytes = acc_bytes;
+                let base_files = acc_files;
+                fsutil::count_tree(&p, &ctl, &mut |b, f, cur| {
+                    em.set_current(cur);
+                    em.set_discovered(base_bytes + b, base_files + f);
+                })
+            };
+            acc_bytes += stat.bytes;
+            acc_files += stat.files;
             if stat.cancelled {
                 stopped = true;
                 break;
@@ -409,6 +421,17 @@ fn run_scan(em: &mut Emitter) {
 }
 
 // ---------------------------------------------------------------- 执行
+
+/// 单条目标的清理结果。前端据此把已经清干净的条目当场从列表里摘掉，
+/// 于是清理过程中列表和合计体积会一起往下减，不用等结束再手动重扫一次。
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct CleanDone {
+    id: String,
+    bytes: u64,
+    /// 整条都处理干净了才为 true；有跳过/失败的条目留在列表上，提示磁盘上还有残留
+    removed: bool,
+}
 
 struct Counter {
     ok: u64,
@@ -475,6 +498,17 @@ fn run_clean(em: &mut Emitter, targets: Vec<CleanTarget>, permanent: bool, data_
             },
             if use_perm { "  (直接删除)" } else { "" }
         ));
+        // 每处理完一条就报一次结果：清干净的条目前端会立刻从列表里摘掉。
+        // removed 要求这一条既没跳过也没失败 —— 有残留的条目留在列表上，
+        // 免得列表看着已经清空、磁盘上其实还留着东西。
+        em.row(
+            "clean_done",
+            CleanDone {
+                id: t.id.clone(),
+                bytes: c.bytes - before.3,
+                removed: c.failed == before.2 && c.skipped == before.1,
+            },
+        );
         em.inc_items();
     }
 
@@ -521,7 +555,7 @@ fn process_file(
         }
         return;
     }
-    match trash::delete(path) {
+    match fsutil::move_to_trash(path) {
         Ok(_) => {
             c.ok += 1;
             c.bytes += bytes;
@@ -530,7 +564,7 @@ fn process_file(
         }
         Err(e) => {
             fsutil::clear_readonly(path);
-            if trash::delete(path).is_ok() {
+            if fsutil::move_to_trash(path).is_ok() {
                 c.ok += 1;
                 c.bytes += bytes;
                 em.add_files(1, bytes);
@@ -582,7 +616,7 @@ fn process_remove(
     if stat.cancelled {
         return;
     }
-    match trash::delete(path) {
+    match fsutil::move_to_trash(path) {
         Ok(_) => {
             c.ok += 1;
             c.bytes += stat.bytes;
@@ -668,7 +702,7 @@ fn process_dir(
             if stat.cancelled {
                 return;
             }
-            match trash::delete(&child) {
+            match fsutil::move_to_trash(&child) {
                 Ok(_) => {
                     c.ok += 1;
                     c.bytes += stat.bytes;
@@ -684,7 +718,7 @@ fn process_dir(
                 }
                 Err(e) => {
                     fsutil::clear_readonly(&child);
-                    if trash::delete(&child).is_ok() {
+                    if fsutil::move_to_trash(&child).is_ok() {
                         c.ok += 1;
                         c.bytes += stat.bytes;
                         em.add_files(stat.files, stat.bytes);
