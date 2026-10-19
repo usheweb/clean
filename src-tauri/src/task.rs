@@ -83,6 +83,10 @@ pub struct Emitter {
     files_total: u64,
     bytes_done: u64,
     bytes_total: u64,
+    /// 批量搬运：已完成项的累计字节基线（set_discovered 上报的字节叠在它上面）
+    bytes_base: u64,
+    /// 批量搬运：整批总量一旦锁定，搬运单元内部不得再改写
+    bytes_total_locked: bool,
     can_pause: bool,
     indeterminate: bool,
     start: Instant,
@@ -105,6 +109,8 @@ impl Emitter {
             files_total: 0,
             bytes_done: 0,
             bytes_total: 0,
+            bytes_base: 0,
+            bytes_total_locked: false,
             can_pause: true,
             indeterminate: true,
             start: now,
@@ -137,16 +143,35 @@ impl Emitter {
 
     /// 只设置字节总量（不动条目/文件计数）：搬运类任务用它驱动字节级进度条，
     /// 同时保留"第几项 / 共几项"的显示。目前仅 Windows 的高级迁移用得到。
+    ///
+    /// 批量搬运会先 lock_bytes_total()：锁定后搬运单元内部的调用不再改写总量，
+    /// 否则每搬一项都重设总量，进度条就会被打回原点，看起来像"从头再来"。
     #[cfg_attr(not(windows), allow(dead_code))]
     pub fn set_bytes_total(&mut self, bytes: u64) {
+        if self.bytes_total_locked {
+            return;
+        }
         self.bytes_total = bytes;
         self.files_total = 0;
         self.indeterminate = self.bytes_total == 0 && self.items_total == 0;
     }
 
+    /// 批量搬运：锁定整批总量（此后 set_bytes_total 失效）
+    #[cfg_attr(not(windows), allow(dead_code))]
+    pub fn lock_bytes_total(&mut self) {
+        self.bytes_total_locked = true;
+    }
+
+    /// 批量搬运：已完成项累计了多少字节。之后 set_discovered 上报的字节叠在这个基线上，
+    /// 于是进度条只在整批范围内单调前进，不会每处理一项都从头再走一遍。
+    #[cfg_attr(not(windows), allow(dead_code))]
+    pub fn set_bytes_base(&mut self, base: u64) {
+        self.bytes_base = base;
+    }
+
     /// 枚举阶段：已发现的总量（绝对值，不是增量），配合不定的总量显示
     pub fn set_discovered(&mut self, bytes: u64, files: u64) {
-        self.bytes_done = bytes;
+        self.bytes_done = self.bytes_base + bytes;
         self.files_done = files;
         self.tick();
     }

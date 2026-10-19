@@ -255,7 +255,6 @@ pub fn start_rebuild_ledger(
 #[cfg(windows)]
 mod imp {
     use std::io::Read;
-    use std::os::windows::process::CommandExt;
     use std::path::{Path, PathBuf};
     use std::process::{Command, Stdio};
     use std::time::Duration;
@@ -267,8 +266,6 @@ mod imp {
     use crate::state::TaskCtl;
     use crate::task::Emitter;
 
-    /// GUI 模式不让子进程弹黑窗口
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     const MB: u64 = 1024 * 1024;
 
     // ---------------------------------------------------------------- 进程常量
@@ -540,10 +537,6 @@ mod imp {
         chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
     }
 
-    fn no_window(cmd: &mut Command) {
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
-
     fn dir_size(p: &str) -> (u64, u64) {
         fsutil::path_size(Path::new(p))
     }
@@ -576,7 +569,7 @@ mod imp {
     fn wsl_running_distros() -> Vec<String> {
         let mut cmd = Command::new("wsl");
         cmd.args(["--list", "--quiet", "--running"]);
-        no_window(&mut cmd);
+        fsutil::no_window(&mut cmd);
         match cmd.output() {
             Ok(o) => decode_utf16le(&o.stdout)
                 .split(['\r', '\n'])
@@ -591,7 +584,7 @@ mod imp {
         em.log("  执行 wsl --shutdown 关闭 WSL（未保存的终端工作会丢失）…", "warn");
         let mut cmd = Command::new("wsl");
         cmd.arg("--shutdown");
-        no_window(&mut cmd);
+        fsutil::no_window(&mut cmd);
         let _ = cmd.output();
         std::thread::sleep(Duration::from_secs(3));
     }
@@ -894,18 +887,21 @@ mod imp {
         }
     }
 
-    /// 三份写同一份最新内容（主文件 / .bak / 数据旁边镜像），再追加一行操作日志
-    fn save_ledger(data_dir: &Path, entries: &[LedgerEntry], op: &str) {
+    /// 三份写同一份最新内容（主文件 / .bak / 数据旁边镜像），再追加一行操作日志。
+    /// 返回主文件是否成功落盘：调用方据此把失败暴露到日志里，
+    /// 免得"账本没建起来"这种情况被静默吞掉，无从排查。
+    fn save_ledger(data_dir: &Path, entries: &[LedgerEntry], op: &str) -> bool {
         let _ = std::fs::create_dir_all(data_dir);
         let prev = read_ledger_file(&ledger_file(data_dir)).unwrap_or_default();
         let Ok(data) = serde_json::to_string_pretty(entries) else {
-            return;
+            return false;
         };
         // 主文件：写临时文件再 rename，避免写一半被强杀留下坏文件
         let main = ledger_file(data_dir);
         let tmp = data_dir.join(format!("{LEDGER_FILE_NAME}.tmp"));
+        let mut ok = false;
         if std::fs::write(&tmp, &data).is_ok() {
-            let _ = std::fs::rename(&tmp, &main);
+            ok = std::fs::rename(&tmp, &main).is_ok();
         }
         let mut targets = vec![ledger_bak(data_dir)];
         let mut all: Vec<LedgerEntry> = entries.to_vec();
@@ -922,6 +918,7 @@ mod imp {
             }
         }
         append_journal(data_dir, entries, op);
+        ok
     }
 
     /// 读账本，一路兜底：主文件 → .bak → 日志末条 → 数据旁边镜像；救回后立刻回填主文件
@@ -1056,7 +1053,7 @@ mod imp {
         let mut cmd = Command::new("robocopy");
         cmd.args(&args);
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-        no_window(&mut cmd);
+        fsutil::no_window(&mut cmd);
         let mut child = match cmd.spawn() {
             Ok(c) => c,
             Err(e) => return (16, format!("robocopy 启动失败: {e}")),
@@ -1133,6 +1130,14 @@ mod imp {
             return false;
         }
         em.log("  已把数据搬回源位置", "ok");
+        // robocopy /MOVE 只清空目标目录、不会删掉目录本身。留着它的话，下次再迁这条会被
+        // "目标路径已存在" 直接挡掉 —— 等于这条永远搬不动，账本自然一直建不起来。
+        if let Err(e) = std::fs::remove_dir(dst) {
+            em.log(
+                format!("  目标空目录 {dst} 未能删除({e})，下次迁移前请手动删除"),
+                "warn",
+            );
+        }
         true
     }
 
@@ -1141,7 +1146,7 @@ mod imp {
         let line = format!("mklink /J \"{src}\" \"{dst}\"");
         let mut cmd = Command::new("cmd");
         cmd.args(["/c", &line]);
-        no_window(&mut cmd);
+        fsutil::no_window(&mut cmd);
         let ok = cmd.output().map(|o| o.status.success()).unwrap_or(false);
         ok && fsutil::is_reparse(Path::new(src)) && Path::new(src).exists()
     }
@@ -1174,8 +1179,13 @@ mod imp {
         }
 
         em.set_phase("统计", name);
+        // 统计阶段只滚动"当前文件"，不推字节进度：这一段和随后的搬运覆盖的是同一段字节，
+        // 两边都推的话搬运一启动就会把刚走过的进度打回去（看起来像重新开始）。
         let st = {
-            let mut tick = |b: u64, f: u64, _p: &Path| em.set_discovered(b, f);
+            let mut tick = |_b: u64, _f: u64, p: &Path| {
+                em.set_current(p);
+                em.tick();
+            };
             fsutil::count_tree(Path::new(&src), &ctl, &mut tick)
         };
         if st.cancelled {
@@ -1275,7 +1285,12 @@ mod imp {
         };
         let mut entries = load_ledger(data_dir);
         entries.push(entry.clone());
-        save_ledger(data_dir, &entries, "migrate");
+        if !save_ledger(data_dir, &entries, "migrate") {
+            em.log(
+                "  ! 账本主文件写入失败, 本条记录可能丢失, 请检查磁盘空间与权限",
+                "error",
+            );
+        }
         Ok(entry)
     }
 
@@ -1655,16 +1670,22 @@ mod imp {
             em.set_can_pause(true);
             em.set_phase("迁移", "开始迁移");
             em.set_items_total(rows.len() as u64);
+            // 整批总量一次性定死并锁定：搬运单元内部再调 set_bytes_total 也不会改写它。
+            // 进度条因此只在整批范围内单调前进，不会每搬一项就被打回原点。
+            em.set_bytes_total(rows.iter().map(|r| r.bytes).sum());
+            em.lock_bytes_total();
             let defs = defs();
             let mut ok = 0u64;
             let mut failed = 0u64;
             let mut bytes = 0u64;
+            let mut done_bytes = 0u64;
 
             for row in &rows {
                 if ctl.wait_gate() {
                     break;
                 }
                 em.set_current(&row.src);
+                em.set_bytes_base(done_bytes);
                 let def = defs.iter().find(|d| d.key == row.key);
                 if def.map(|d| d.wsl).unwrap_or(false) {
                     wsl_shutdown(&mut em);
@@ -1684,6 +1705,7 @@ mod imp {
                     Ok(entry) => {
                         ok += 1;
                         bytes += entry.bytes;
+                        done_bytes += entry.bytes;
                         em.row("migrate_ledger", entry);
                     }
                     Err(msg) => {

@@ -9,6 +9,14 @@ use crate::state::TaskCtl;
 #[cfg(windows)]
 const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
 
+/// 隐藏子进程的控制台窗口（Windows 专有）。
+/// 不加这一句，每次 spawn 外部命令（tasklist / robocopy / cmd …）都会闪一个黑窗口出来。
+#[cfg(windows)]
+pub fn no_window(cmd: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+}
+
 /// 是否为 junction / 符号链接 / 挂载点（取不到属性时按普通路径处理）
 pub fn is_reparse(p: &Path) -> bool {
     match std::fs::symlink_metadata(p) {
@@ -224,7 +232,11 @@ pub fn running_processes(names: &[String]) -> Vec<String> {
     }
     #[cfg(windows)]
     {
-        match Command::new("tasklist").args(["/FO", "CSV", "/NH"]).output() {
+        // 必须隐藏控制台窗口：否则扫描时每检测一次进程就弹一次黑窗口
+        let mut cmd = Command::new("tasklist");
+        cmd.args(["/FO", "CSV", "/NH"]);
+        no_window(&mut cmd);
+        match cmd.output() {
             Ok(out) => {
                 let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
                 names
