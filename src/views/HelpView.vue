@@ -24,7 +24,7 @@ async function copyEmail() {
       <div>
         <h1>使用说明</h1>
         <p class="sub">
-          {{ app.info?.productName || "唐三浪清理" }} v{{ app.info?.version || "0.0.1" }} ——
+          {{ app.info?.productName || "唐三浪清理" }} v{{ app.info?.version || "0.0.2" }} ——
           完全离线运行，不联网、不上传任何数据；所有清理项都是内置白名单，只碰清单里的目录。
         </p>
       </div>

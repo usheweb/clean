@@ -3,6 +3,7 @@ import { ref } from "vue";
 
 import { cancelTask, onTaskDone, onTaskLog, onTaskProgress, pauseTask, resumeTask } from "../api/ipc";
 import type { TaskDone, TaskLog, TaskProgress } from "../api/types";
+import { useUiStore } from "./ui";
 
 const MAX_LOGS = 800;
 
@@ -18,7 +19,23 @@ export const useTaskStore = defineStore("task", () => {
   const lastDone = ref<TaskDone | null>(null);
   const showLogs = ref(false);
 
+  const ui = useUiStore();
+
   let initialized = false;
+  let subFailReported = false;
+
+  /**
+   * 事件订阅失败要显式暴露出来。
+   * Tauri 2 里 listen 走核心命令 core:event:listen，缺少 capability 授权时会被拒绝；
+   * 以前这里直接 void 掉 promise，失败既没日志也没提示，界面就会「一直转、却收不到任何进度」。
+   */
+  function onSubFail(what: string, e: unknown) {
+    const text = `事件订阅失败（${what}）：${String(e)}`;
+    console.error(text, e);
+    if (subFailReported) return;
+    subFailReported = true;
+    ui.push(`${text}，任务进度与扫描结果都无法送达界面`, "error", 8000);
+  }
 
   function init() {
     if (initialized) return;
@@ -26,20 +43,20 @@ export const useTaskStore = defineStore("task", () => {
     void onTaskProgress((p) => {
       if (p.taskId !== taskId.value) return;
       progress.value = p;
-    });
+    }).catch((e) => onSubFail("进度", e));
     void onTaskLog((l) => {
       if (l.taskId !== taskId.value) return;
       logs.value.push(l);
       if (logs.value.length > MAX_LOGS) {
         logs.value.splice(0, logs.value.length - MAX_LOGS);
       }
-    });
+    }).catch((e) => onSubFail("日志", e));
     void onTaskDone((d) => {
       if (d.taskId !== taskId.value) return;
       lastDone.value = d;
       running.value = false;
       progress.value = null;
-    });
+    }).catch((e) => onSubFail("完成", e));
   }
 
   /** 起一个任务：fn 返回 taskId（命令本身立即返回） */
