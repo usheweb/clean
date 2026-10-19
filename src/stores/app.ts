@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { getAppInfo } from "../api/ipc";
 import type { AppInfo } from "../api/types";
@@ -14,9 +15,13 @@ export const useAppStore = defineStore("app", () => {
 
   async function load() {
     try {
-      info.value = await getAppInfo();
-    } catch {
-      // 非 Tauri 环境（纯浏览器调试）时忽略
+      const i = await getAppInfo();
+      info.value = i;
+      // 标题栏带上版本号，任务栏 / 窗口列表里就能直接分辨当前跑的是哪个版本
+      await getCurrentWindow().setTitle(`${i.productName} v${i.version}`);
+    } catch (e) {
+      // 非 Tauri 环境（纯浏览器调试）时忽略；另，设标题失败不影响其余功能
+      console.error("读取应用信息或设置窗口标题失败", e);
     }
   }
 
