@@ -1,6 +1,6 @@
 name: Release
 
-# 推 v* 标签（如 v0.0.2）自动打包各平台安装包并上传到 Release；
+# 推 v* 标签（如 v0.0.3）自动打包各平台安装包并上传到 Release；
 # 也可以在 Actions 页面手动触发（workflow_dispatch）来试跑。
 on:
   push:
@@ -57,7 +57,7 @@ jobs:
 
       # 资产名默认直接沿用产品名，而产品名是纯中文，GitHub 会把非 ASCII 字符剥掉、
       # 只剩前导下划线。这里改成「包名(identifier)最后一段 + 版本 + 架构」命名，
-      # 例如 cleanc_0.0.2_universal.dmg。
+      # 例如 cleanc_0.0.3_universal.dmg。
       - name: Resolve asset prefix
         id: asset-prefix
         shell: bash

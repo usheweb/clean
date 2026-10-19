@@ -128,7 +128,7 @@ watch(navItems, (list) => {
       </nav>
 
       <div class="side-foot">
-        <span class="ver">v{{ app.info?.version || "0.0.2" }}</span>
+        <span class="ver">v{{ app.info?.version || "0.0.3" }}</span>
         <button class="theme-btn" :title="cfg.settings.theme === 'dark' ? '切换到浅色' : '切换到深色'" @click="cfg.toggleTheme()">
           <svg v-if="cfg.settings.theme === 'dark'" viewBox="0 0 24 24" width="16" height="16">
             <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />

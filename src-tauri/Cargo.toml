@@ -1,6 +1,6 @@
 [package]
 name = "clean-c"
-version = "0.0.2"
+version = "0.0.3"
 description = "唐三浪清理 —— 跨平台系统垃圾清理与磁盘空间管理工具"
 authors = ["tangsanlang"]
 edition = "2021"
