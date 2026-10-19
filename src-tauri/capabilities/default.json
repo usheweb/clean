@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "默认窗口权限。自定义 command 无需 ACL 声明，但前端订阅 task://* / data://* 事件依赖核心命令 core:event:listen，必须由 core:default 授权，否则界面会一直停在扫描中。",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
