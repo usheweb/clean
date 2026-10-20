@@ -1206,18 +1206,30 @@ mod imp {
         }
     }
 
-    /// 建 junction（cmd 自行解析整行，故显式加引号）。
+    /// 建 junction。
+    /// 关键：mklink、/J、src、dst 必须逐参传，让 Rust 按参数各自加引号，生成
+    /// "cmd /c mklink /J "src" "dst""。若先把整行拼成一个带引号的字符串再当单参数传，
+    /// Rust 会把内部引号二次转义成 \"，cmd.exe 的 /c 又会剥掉外层引号，
+    /// mklink 最终拿到带反斜杠的畸形路径而失败（原始版本即逐参传，可正常工作）。
     /// 失败时把 cmd 实际吐出来的话带回去 —— 只报一句"建联接失败"的话，
     /// 日志里就看不出到底是权限不够还是路径有问题，等于没法排查。
     fn mklink(src: &str, dst: &str) -> Result<(), String> {
-        let line = format!("mklink /J \"{src}\" \"{dst}\"");
         let mut cmd = Command::new("cmd");
-        cmd.args(["/c", &line]);
+        cmd.args(["/c", "mklink", "/J", src, dst]);
         fsutil::no_window(&mut cmd);
         let out = cmd
             .output()
             .map_err(|e| format!("无法启动 cmd 执行 mklink: {e}"))?;
-        let msg = decode_console(&out.stdout).trim().to_string();
+        // mklink 的报错走 stderr（如「文件名、目录名或卷标语法不正确」），只收 stdout
+        // 会让日志永远显示「输出: <空>」，等于没法排查。两边都要收。
+        let mut msg = decode_console(&out.stdout).trim().to_string();
+        let err = decode_console(&out.stderr).trim().to_string();
+        if !err.is_empty() {
+            if !msg.is_empty() {
+                msg.push_str(" / ");
+            }
+            msg.push_str(&err);
+        }
         if out.status.success() && fsutil::is_reparse(Path::new(src)) && Path::new(src).exists() {
             return Ok(());
         }
