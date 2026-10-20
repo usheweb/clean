@@ -557,11 +557,82 @@ mod imp {
         String::from_utf16_lossy(&units)
     }
 
+    /// 解码子进程往管道里吐的字节。
+    /// 中文 Windows 上 cmd / robocopy 的输出是本地代码页（GBK）的字节，拿 UTF-8 硬解
+    /// 会整段变成乱码——包括 mklink 的「文件名、目录名或卷标语法不正确」这句，
+    /// 以及 robocopy 返回码后面那串原因说明。这里交给系统自己解：先按 UTF-8 试
+    /// （系统开了「Beta: 使用 Unicode UTF-8」时控制台就是 UTF-8），失败再按
+    /// ANSI(ACP) / OEM 代码页转 UTF-16，等价于原 Python 版的 mbcs 兜底。
     fn decode_console(b: &[u8]) -> String {
-        match std::str::from_utf8(b) {
-            Ok(s) => s.to_string(),
-            Err(_) => String::from_utf8_lossy(b).into_owned(),
+        if b.is_empty() {
+            return String::new();
         }
+        if let Ok(s) = std::str::from_utf8(b) {
+            return s.to_string();
+        }
+        // CP_ACP = 0、CP_OEMCP = 1，是 Windows 直接支持的代码页编号。
+        // 中文系统上两者都是 936；英文/日文系统上可能只有一个能解对，所以两个都试。
+        if let Some(s) = code_page_to_string(b, 0) {
+            return s;
+        }
+        if let Some(s) = code_page_to_string(b, 1) {
+            return s;
+        }
+        String::from_utf8_lossy(b).into_owned()
+    }
+
+    /// 用系统代码页把字节转成字符串；字节在该代码页下不合法时返回 None。
+    /// MB_ERR_INVALID_CHARS 让非法序列直接报错，而不是悄悄解出替代字符，
+    /// 这样上面才能靠着"有没有解成功"决定要不要换下一个代码页。
+    fn code_page_to_string(b: &[u8], code_page: u32) -> Option<String> {
+        const MB_ERR_INVALID_CHARS: u32 = 0x0000_0008;
+
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn MultiByteToWideChar(
+                code_page: u32,
+                dwflags: u32,
+                lpmultibytestr: *const u8,
+                cbmultibyte: i32,
+                lpwidecharstr: *mut u16,
+                cchwidechar: i32,
+            ) -> i32;
+        }
+
+        if b.len() > i32::MAX as usize {
+            return None;
+        }
+        let cb = b.len() as i32;
+        // 先问需要多长的缓冲区，再真正转换
+        let need = unsafe {
+            MultiByteToWideChar(
+                code_page,
+                MB_ERR_INVALID_CHARS,
+                b.as_ptr(),
+                cb,
+                std::ptr::null_mut(),
+                0,
+            )
+        };
+        if need <= 0 {
+            return None;
+        }
+        let mut buf = vec![0u16; need as usize];
+        let written = unsafe {
+            MultiByteToWideChar(
+                code_page,
+                MB_ERR_INVALID_CHARS,
+                b.as_ptr(),
+                cb,
+                buf.as_mut_ptr(),
+                need,
+            )
+        };
+        if written <= 0 {
+            return None;
+        }
+        buf.truncate(written as usize);
+        Some(String::from_utf16_lossy(&buf))
     }
 
     // ---------------------------------------------------------------- WSL
