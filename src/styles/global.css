@@ -23,11 +23,39 @@ body {
   font-size: 14px;
   line-height: 1.55;
   color: var(--text);
-  background: var(--bg);
+  /* 与 DBMan 同构：底色之上压两层径向光晕（品牌色 + 第二强调色） */
+  background:
+    radial-gradient(
+      1100px 680px at 10% -12%,
+      rgba(var(--brand-rgb), 0.12),
+      transparent 60%
+    ),
+    radial-gradient(
+      900px 620px at 105% 112%,
+      rgba(var(--accent-2-rgb), 0.14),
+      transparent 58%
+    ),
+    var(--bg-0);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   overflow: hidden;
   user-select: none;
+}
+
+/* 42px 网格底纹，靠 mask 从中心向外淡出——DBMan 的“工具体感”来源之一。
+   固定在视口上、不接收事件，内容层统一在 .app 里抬到 z-index 1。 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 42px 42px;
+  -webkit-mask-image: radial-gradient(circle at 50% 40%, #000 30%, transparent 85%);
+  mask-image: radial-gradient(circle at 50% 40%, #000 30%, transparent 85%);
+  pointer-events: none;
+  z-index: 0;
 }
 
 h1,
@@ -60,19 +88,23 @@ a {
   text-decoration: none;
 }
 
-/* 滚动条 */
+/* 滚动条：青紫（深色）/ 绿紫（浅色）渐变滑块，与 DBMan 一致 */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: var(--r-full);
+  background: linear-gradient(
+    180deg,
+    rgba(var(--brand-rgb), 0.45),
+    rgba(var(--accent-2-rgb), 0.45)
+  );
+  border-radius: var(--r-sm);
   border: 2px solid transparent;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-3);
+  background: linear-gradient(180deg, var(--brand), var(--accent-2));
   background-clip: content-box;
 }
 ::-webkit-scrollbar-track {
@@ -90,15 +122,19 @@ a {
   gap: 6px;
   height: 36px;
   padding: 0 16px;
-  border-radius: var(--r);
-  font-weight: 500;
+  border-radius: var(--r-sm);
+  font-weight: 600;
   white-space: nowrap;
   transition: background var(--transition), color var(--transition),
-    box-shadow var(--transition), transform var(--transition);
+    border-color var(--transition), box-shadow var(--transition),
+    transform var(--transition);
   border: 1px solid transparent;
 }
-.btn:active {
-  transform: translateY(1px);
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(0);
 }
 .btn:disabled {
   opacity: 0.45;
@@ -106,42 +142,84 @@ a {
   transform: none;
 }
 
+/* 主按钮：浅色保持实心绿（普通用户对“执行清理”的确定性预期），
+   深色走 DBMan 的青紫渐变描边发光按钮 */
 .btn-primary {
   background: var(--brand);
-  color: #fff;
+  color: var(--text-invert);
+  border-color: var(--brand);
   box-shadow: var(--shadow-sm);
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--brand-hover);
+  border-color: var(--brand-hover);
+  box-shadow: var(--glow-brand);
 }
 .btn-primary:active:not(:disabled) {
   background: var(--brand-active);
 }
 
+[data-theme="dark"] .btn-primary {
+  background: linear-gradient(
+    135deg,
+    rgba(var(--brand-rgb), 0.18),
+    rgba(var(--accent-2-rgb), 0.18)
+  );
+  color: var(--brand);
+  border-color: var(--line-strong);
+  box-shadow: none;
+}
+[data-theme="dark"] .btn-primary:hover:not(:disabled) {
+  color: #eafcff;
+  background: linear-gradient(
+    135deg,
+    rgba(var(--brand-rgb), 0.32),
+    rgba(var(--accent-2-rgb), 0.3)
+  );
+  border-color: var(--brand);
+  box-shadow: var(--glow-brand);
+}
+
 .btn-ghost {
-  background: var(--surface);
+  background: rgba(var(--brand-rgb), 0.04);
   color: var(--text-2);
-  border-color: var(--border);
+  border-color: var(--line);
 }
 .btn-ghost:hover:not(:disabled) {
-  background: var(--surface-3);
+  background: var(--hover);
   color: var(--text);
+  border-color: var(--line-strong);
 }
 
 .btn-soft {
-  background: var(--brand-soft);
+  background: linear-gradient(
+    135deg,
+    rgba(var(--brand-rgb), 0.14),
+    rgba(var(--accent-2-rgb), 0.1)
+  );
   color: var(--brand);
+  border-color: var(--line);
 }
 .btn-soft:hover:not(:disabled) {
-  background: var(--brand-soft-hover);
+  background: linear-gradient(
+    135deg,
+    rgba(var(--brand-rgb), 0.24),
+    rgba(var(--accent-2-rgb), 0.18)
+  );
+  border-color: var(--line-strong);
+  box-shadow: var(--glow-brand);
 }
 
+/* 危险操作：DBMan 用品红而不是纯红，和青紫主色区分得开 */
 .btn-danger {
-  background: var(--red);
-  color: #fff;
+  background: rgba(var(--magenta-rgb), 0.12);
+  color: var(--magenta);
+  border-color: rgba(var(--magenta-rgb), 0.5);
 }
 .btn-danger:hover:not(:disabled) {
-  filter: brightness(1.08);
+  background: rgba(var(--magenta-rgb), 0.18);
+  border-color: var(--magenta);
+  box-shadow: var(--glow-danger);
 }
 
 .btn-sm {
@@ -154,21 +232,29 @@ a {
 .field {
   height: 36px;
   padding: 0 12px;
-  border-radius: var(--r);
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
   color: var(--text);
   outline: none;
-  transition: border-color var(--transition), box-shadow var(--transition);
+  transition: border-color var(--transition), box-shadow var(--transition),
+    background var(--transition);
+}
+.field:hover {
+  border-color: var(--line-strong);
 }
 .field:focus {
+  background: var(--panel-solid);
   border-color: var(--brand);
   box-shadow: 0 0 0 3px var(--brand-ring);
 }
 
+/* 卡片：半透明 + 毛玻璃 + 品牌色描边，DBMan 的面板质感 */
 .card {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--panel);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-sm);
 }
@@ -217,7 +303,7 @@ a {
   height: 18px;
   border: 1.5px solid var(--border-strong);
   border-radius: 5px;
-  background: var(--surface);
+  background: var(--panel-solid);
   cursor: pointer;
   position: relative;
   flex: none;

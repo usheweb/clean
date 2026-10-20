@@ -106,9 +106,12 @@ const bytesLeft = computed(() => {
 <style scoped>
 .taskbar {
   position: relative;
-  border-top: 1px solid var(--border);
-  background: var(--bg-elevated);
-  box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.06);
+  border-top: 1px solid var(--line);
+  /* 底部任务条也走毛玻璃，避免盖住网格底纹时出现一块死板的白/黑 */
+  background: var(--panel);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 -6px 24px -12px rgba(var(--brand-rgb), 0.5);
   flex: none;
 }
 
@@ -202,7 +205,7 @@ const bytesLeft = computed(() => {
 .badge {
   margin-left: 5px;
   background: var(--brand);
-  color: #fff;
+  color: var(--text-invert);
   border-radius: var(--r-full);
   font-size: 10px;
   padding: 0 5px;
@@ -247,8 +250,8 @@ const bytesLeft = computed(() => {
   max-height: 260px;
   display: flex;
   flex-direction: column;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
+  background: var(--panel-solid);
+  border-top: 1px solid var(--line);
   box-shadow: var(--shadow-lg);
 }
 .log-head {

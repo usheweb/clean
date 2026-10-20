@@ -128,7 +128,7 @@ watch(navItems, (list) => {
       </nav>
 
       <div class="side-foot">
-        <span class="ver">v{{ app.info?.version || "0.0.7" }}</span>
+        <span class="ver">v{{ app.info?.version || "0.0.8" }}</span>
         <button class="theme-btn" :title="cfg.settings.theme === 'dark' ? '切换到浅色' : '切换到深色'" @click="cfg.toggleTheme()">
           <svg v-if="cfg.settings.theme === 'dark'" viewBox="0 0 24 24" width="16" height="16">
             <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
@@ -157,27 +157,31 @@ watch(navItems, (list) => {
 
 <style scoped>
 .app {
+  /* 网格底纹是固定的 body::before（z-index 0），内容层统一抬一层 */
+  position: relative;
+  z-index: 1;
   display: flex;
   height: 100%;
-  background: var(--bg);
   color: var(--text);
 }
 
-/* ---------- 侧边栏 ---------- */
+/* ---------- 侧边栏（毛玻璃面板） ---------- */
 .sidebar {
   width: var(--sidebar-w);
   flex: none;
   display: flex;
   flex-direction: column;
-  background: var(--bg-elevated);
-  border-right: 1px solid var(--border);
+  background: var(--panel);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-right: 1px solid var(--line);
 }
 .brand {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-4);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--line);
 }
 .brand-mark {
   width: 36px;
@@ -190,10 +194,22 @@ watch(navItems, (list) => {
 .brand-text {
   min-width: 0;
 }
+/* 品牌名走 DBMan 同款「渐变裁到文字 + 轻微发光」 */
 .brand-name {
   font-size: 14px;
   font-weight: 650;
   line-height: 1.3;
+  letter-spacing: 0.5px;
+  background: linear-gradient(
+    90deg,
+    var(--brand),
+    var(--brand-bright) 55%,
+    var(--accent-2)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 10px rgba(var(--brand-rgb), 0.35));
 }
 .brand-sub {
   font-size: 11.5px;
@@ -216,19 +232,29 @@ watch(navItems, (list) => {
   gap: 10px;
   height: 38px;
   padding: 0 12px;
+  border: 1px solid transparent;
   border-radius: var(--r);
   color: var(--text-2);
   font-size: 13.5px;
   text-align: left;
-  transition: background var(--transition), color var(--transition);
+  transition: background var(--transition), color var(--transition),
+    border-color var(--transition), box-shadow var(--transition);
 }
 .nav-item:hover {
   background: var(--hover);
   color: var(--text);
+  border-color: var(--line);
 }
+/* 选中项：青紫（深色）/ 绿紫（浅色）渐变底 + 品牌色描边发光 */
 .nav-item.active {
-  background: var(--brand-soft);
+  background: linear-gradient(
+    135deg,
+    rgba(var(--brand-rgb), 0.16),
+    rgba(var(--accent-2-rgb), 0.1)
+  );
   color: var(--brand);
+  border-color: rgba(var(--brand-rgb), 0.4);
+  box-shadow: 0 0 22px -8px rgba(var(--brand-rgb), 0.8);
   font-weight: 600;
 }
 .nav-icon {
@@ -246,7 +272,7 @@ watch(navItems, (list) => {
   justify-content: space-between;
   gap: var(--sp-2);
   padding: var(--sp-3) var(--sp-4);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--line);
 }
 .ver {
   font-size: 11.5px;
@@ -259,14 +285,18 @@ watch(navItems, (list) => {
   height: 28px;
   padding: 0 10px;
   border-radius: var(--r-full);
+  border: 1px solid var(--line);
   background: var(--surface-3);
   color: var(--text-2);
   font-size: 12px;
-  transition: background var(--transition), color var(--transition);
+  transition: background var(--transition), color var(--transition),
+    border-color var(--transition), box-shadow var(--transition);
 }
 .theme-btn:hover {
-  background: var(--brand-soft);
+  background: rgba(var(--brand-rgb), 0.14);
+  border-color: var(--line-strong);
   color: var(--brand);
+  box-shadow: var(--glow-brand);
 }
 .theme-btn svg {
   fill: none;

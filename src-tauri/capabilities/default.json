@@ -1,7 +1,11 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "默认窗口权限。自定义 command 无需 ACL 声明；core:default 覆盖事件订阅（core:event:listen，缺了界面会一直停在扫描中），另需单独授权修改窗口标题（core:window:set-title，标题栏要显示版本号）。",
+  "description": "默认窗口权限。自定义 command 无需 ACL 声明；core:default 覆盖事件订阅（core:event:listen，缺了界面会一直停在扫描中），另需单独授权修改窗口标题（core:window:set-title，标题栏要显示版本号）与窗口主题（core:window:set-theme，深色主题下原生标题栏要同步变暗）。",
   "windows": ["main"],
-  "permissions": ["core:default", "core:window:allow-set-title"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-title",
+    "core:window:allow-set-theme"
+  ]
 }

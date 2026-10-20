@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { getSettings, saveSettings } from "../api/ipc";
 import type { Settings } from "../api/types";
@@ -18,7 +19,15 @@ export const useSettingsStore = defineStore("settings", () => {
   const loaded = ref(false);
 
   function applyTheme() {
-    document.documentElement.dataset.theme = settings.value.theme === "dark" ? "dark" : "light";
+    const dark = settings.value.theme === "dark";
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    // 原生标题栏（macOS 红绿灯那一条）不会跟着 CSS 变，深色界面下会顶一条浅灰系统栏，
+    // 所以要把窗口主题一起切过去。
+    getCurrentWindow()
+      .setTheme(dark ? "dark" : "light")
+      .catch(() => {
+        /* 非 Tauri 环境或权限缺失时不影响网页内的主题 */
+      });
   }
 
   async function load() {

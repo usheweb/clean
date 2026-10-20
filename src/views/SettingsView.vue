@@ -125,7 +125,7 @@ async function elevate() {
       <h2 class="sec-title">关于</h2>
       <div class="about">
         <div class="about-row"><span class="k">产品名称</span><span>{{ app.info?.productName || "唐三浪清理" }}</span></div>
-        <div class="about-row"><span class="k">版本</span><span>v{{ app.info?.version || "0.0.7" }}</span></div>
+        <div class="about-row"><span class="k">版本</span><span>v{{ app.info?.version || "0.0.8" }}</span></div>
         <div class="about-row"><span class="k">平台</span><span>{{ app.info?.platform || "—" }}</span></div>
         <div class="about-row"><span class="k">用户目录</span><span class="mono">{{ app.info?.homeDir || "—" }}</span></div>
       </div>

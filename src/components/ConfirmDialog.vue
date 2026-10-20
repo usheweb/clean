@@ -64,7 +64,7 @@ function close() {
   position: fixed;
   inset: 0;
   z-index: 1500;
-  background: rgba(10, 15, 22, 0.42);
+  background: var(--overlay-bg);
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;

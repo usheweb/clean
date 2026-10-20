@@ -115,7 +115,7 @@ async function close() {
   position: fixed;
   inset: 0;
   z-index: 1800;
-  background: rgba(10, 15, 22, 0.42);
+  background: var(--overlay-bg);
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
@@ -125,10 +125,10 @@ async function close() {
 .promo {
   width: 100%;
   max-width: 604px;
-  background: #fdfefe;
-  border: 1px solid #7fc6d4;
+  background: var(--panel-solid);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-lg), 0 0 40px -18px rgba(var(--brand-rgb), 0.6);
   padding: var(--sp-5);
 }
 .promo-img {
@@ -150,21 +150,24 @@ async function close() {
   align-items: center;
   gap: var(--sp-2);
   font-size: 13px;
-  color: #5a6f86;
+  color: var(--text-2);
   cursor: pointer;
 }
 .promo-btn {
-  background: #f2f6f8;
-  color: #a8bccb;
+  background: var(--surface-2);
+  color: var(--text-3);
+  border-color: var(--line);
   min-width: 130px;
 }
 .promo-btn.ready {
-  background: #e3f3f7;
-  color: #008da8;
+  background: var(--brand-soft);
+  color: var(--brand);
+  border-color: var(--line-strong);
 }
 .promo-btn.ready:hover {
-  background: #c9e9f1;
-  color: #04252e;
+  background: var(--brand-soft-hover);
+  color: var(--brand-bright);
+  box-shadow: var(--glow-brand);
 }
 
 .promo-enter-active,
