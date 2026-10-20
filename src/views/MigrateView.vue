@@ -14,6 +14,7 @@ import {
   startReorganize,
   startRestore,
   type LedgerEntry,
+  type MigrateDoneRow,
   type MigrateItem,
   type MigrateRow,
 } from "../api/ipc";
@@ -40,6 +41,7 @@ let unRow: (() => void) | null = null;
 let unDone: (() => void) | null = null;
 let unLedger: (() => void) | null = null;
 let unAllDone: (() => void) | null = null;
+let unMigrated: (() => void) | null = null;
 
 const drive = ref("");
 const rootName = ref("clean_c_migrated");
@@ -66,14 +68,31 @@ onMounted(async () => {
     else ledger.value.push(r.row);
   });
   unAllDone = await onDataDone("migrate_ledger", () => undefined);
+  // 每搬完一条就把该行标成「已迁移」并取消勾选。不这样做的话，列表会一直停在扫描时的
+  // 样子（条目还在、还勾着、体积还是原值、状态还写着"可迁移"），用户只能自己再扫一遍。
+  // 失败的条目不发这个事件 —— 数据已回搬原位置，保持"可迁移 + 勾选"状态正好可以重试。
+  unMigrated = await onDataRow<MigrateDoneRow>("migrate_done", (r) => {
+    const row = rows.value.find((x) => x.key === r.row.key);
+    if (!row) return;
+    row.migrated = true;
+    selected.delete(r.row.key);
+  });
   task.init();
 });
 
-// 迁移/还原/整理/重建结束后刷新账本（后端事件只能追加/替换，删不掉已还原的记录）
+// 迁移/还原/整理/重建结束后刷新账本，并让列表行的「已迁移」跟账本对齐：
+// 迁移成功的亮起来，被还原掉的退回去。账本事件只能追加/替换，删不掉已还原的记录，
+// 所以必须重新拉一次；列表则按 key 对账，免得还原完还挂着"已迁移"的旧状态。
 watch(
   () => task.running,
   async (now, before) => {
-    if (before && !now) ledger.value = await listLedger();
+    if (!before || now) return;
+    ledger.value = await listLedger();
+    const keys = new Set(ledger.value.map((e) => e.key));
+    for (const r of rows.value) {
+      r.migrated = keys.has(r.key);
+      if (r.migrated) selected.delete(r.key);
+    }
   },
 );
 
@@ -82,6 +101,7 @@ onBeforeUnmount(() => {
   unDone?.();
   unLedger?.();
   unAllDone?.();
+  unMigrated?.();
 });
 
 const catOrder = ["开发", "聊天", "办公", "浏览器", "工具", "系统", "候选"];

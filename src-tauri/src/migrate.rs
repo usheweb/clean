@@ -42,6 +42,16 @@ pub struct MigrateRow {
     pub migrated: bool,
 }
 
+/// 单条迁移结果：迁移成功的条目要当场在列表里标成「已迁移」并取消勾选。
+/// 不报的话，界面会一直停在扫描时的样子 —— 条目还在、还勾着、还写着"可迁移"，
+/// 用户只能自己再扫一遍才看得到真实状态。
+#[cfg(windows)]
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct MigrateDone {
+    key: String,
+}
+
 /// 账本条目。需要反序列化：从磁盘文件 / 日志里读回账本。
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -261,7 +271,7 @@ mod imp {
 
     use tauri::AppHandle;
 
-    use super::{LedgerEntry, MigrateItem, MigrateRow};
+    use super::{LedgerEntry, MigrateDone, MigrateItem, MigrateRow};
     use crate::fsutil;
     use crate::state::TaskCtl;
     use crate::task::Emitter;
@@ -1895,6 +1905,9 @@ mod imp {
                         ok += 1;
                         bytes += entry.bytes;
                         done_bytes += entry.bytes;
+                        // 先报「这一条成了」，前端据此把该行标成「已迁移」并取消勾选；
+                        // 失败的不报，界面保持原样（数据已回搬，仍可重试）。
+                        em.row("migrate_done", MigrateDone { key: row.key.clone() });
                         em.row("migrate_ledger", entry);
                         report.push(format!(
                             "[成功] {} {} -> {} ({})",

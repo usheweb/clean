@@ -106,6 +106,11 @@ export interface MigrateRow {
   migrated: boolean;
 }
 
+/** 单条迁移结果：迁移成功的条目要当场标成「已迁移」并取消勾选 */
+export interface MigrateDoneRow {
+  key: string;
+}
+
 export interface LedgerEntry {
   key: string;
   name: string;

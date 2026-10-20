@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 import { relaunchAsAdmin } from "../api/client";
+import { listDrives } from "../api/ipc";
 import { useAppStore } from "../stores/app";
 import { useSettingsStore } from "../stores/settings";
 import { useUiStore } from "../stores/ui";
@@ -11,13 +12,33 @@ const cfg = useSettingsStore();
 const ui = useUiStore();
 
 const rootName = ref(cfg.settings.targetRootName);
+// 默认目标盘：迁移和「整理到该目录」都落在这个盘上，省得每次都去迁移页挑一遍
+const targetDrive = ref(cfg.settings.targetDrive);
+const drives = ref<string[]>([]);
 const saving = ref(false);
 
 const themeLabel = computed(() => (cfg.settings.theme === "dark" ? "深色" : "浅色"));
 
-async function saveRootName() {
+onMounted(async () => {
+  if (!app.isWin) return;
+  try {
+    drives.value = await listDrives();
+  } catch {
+    drives.value = [];
+  }
+  // 设置里存的盘可能已经拔掉了，这时退回第一个非 C 盘的选项
+  if (drives.value.length && !drives.value.includes(targetDrive.value)) {
+    targetDrive.value =
+      drives.value.find((d) => !d.toUpperCase().startsWith("C")) || drives.value[0];
+  }
+});
+
+async function saveMigrate() {
   saving.value = true;
-  await cfg.update({ targetRootName: rootName.value.trim() || "clean_c_migrated" });
+  await cfg.update({
+    targetRootName: rootName.value.trim() || "clean_c_migrated",
+    targetDrive: targetDrive.value,
+  });
   rootName.value = cfg.settings.targetRootName;
   saving.value = false;
   ui.push("设置已保存", "ok");
@@ -59,12 +80,22 @@ async function elevate() {
       <h2 class="sec-title">高级迁移</h2>
       <div class="sec-row">
         <div>
+          <div class="k">默认目标盘</div>
+          <div class="text-3 v">迁移和「整理到该目录」默认落到这个盘；迁移页里也可以临时改</div>
+        </div>
+        <select v-model="targetDrive" class="field" :disabled="saving">
+          <option v-if="!drives.length" value="">（未检测到可用盘）</option>
+          <option v-for="d in drives" :key="d" :value="d">{{ d }}</option>
+        </select>
+      </div>
+      <div class="sec-row">
+        <div>
           <div class="k">默认目标文件夹名</div>
           <div class="text-3 v">迁移数据在目标盘上的存放目录</div>
         </div>
         <div class="inline">
           <input v-model="rootName" class="field" :disabled="saving" />
-          <button class="btn btn-primary btn-sm" :disabled="saving" @click="saveRootName">保存</button>
+          <button class="btn btn-primary btn-sm" :disabled="saving" @click="saveMigrate">保存</button>
         </div>
       </div>
     </section>
@@ -133,6 +164,9 @@ async function elevate() {
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-4);
+}
+.sec-row + .sec-row {
+  margin-top: var(--sp-4);
 }
 .k {
   font-weight: 550;
